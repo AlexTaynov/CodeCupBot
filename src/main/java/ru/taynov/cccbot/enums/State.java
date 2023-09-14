@@ -4,20 +4,17 @@ import lombok.RequiredArgsConstructor;
 
 @RequiredArgsConstructor
 public enum State {
-    START(false),
-    SHOW_ALL(false),
-    SEARCH(false),
-    DELETE_CONFIRM(false),
-    ADD(false),
-    EDIT(false),
-    CHANGE_FIRSTNAME(false),
-    CHANGE_LASTNAME(false),
-    CHANGE_POST(false),
-    CHANGE_PROJECT(false),
-    CHANGE_HIRING_DATE(true),
-    CHANGE_PHOTO(true);
-
-    private final Boolean isOptional;
-
+    START,
+    SHOW_ALL,
+    SEARCH,
+    ADD,
+    EDIT,
+    CHANGE_FIRSTNAME,
+    CHANGE_LASTNAME,
+    CHANGE_MIDDLENAME,
+    CHANGE_POST,
+    CHANGE_PROJECT,
+    CHANGE_HIRING_DATE,
+    CHANGE_PHOTO;
 }
 

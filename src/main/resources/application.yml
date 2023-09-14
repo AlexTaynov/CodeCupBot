@@ -1,6 +1,12 @@
 bot:
-  name: CccBot
-  token: 5552760860:AAEB9EKP9Y9S4blOioIpD45_eNVEI1q8hDU
+  name: ${BOT_NAME}
+  token: ${TOKEN}
 
-
-#db related settings
+spring:
+  data:
+    mongodb:
+      auto-index-creation: true
+      uri: mongodb://localhost:27017/ccc?authSource=admin
+  jackson:
+    mapper:
+      accept-case-insensitive-enums: true
