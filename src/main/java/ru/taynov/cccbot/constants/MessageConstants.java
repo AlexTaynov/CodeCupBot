@@ -73,7 +73,7 @@ public class MessageConstants {
             """;
 
     public static final String SEARCH_HINT = """
-            Введите фамилию и/или имя сотрудника
+            Введите информацию для поиска
             """;
 
     public static final String ADMIN = "Админ";
