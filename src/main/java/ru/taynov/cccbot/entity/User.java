@@ -16,4 +16,9 @@ public class User {
     private State state = State.START;
 
     private String username;
+
+    @Builder.Default
+    private Boolean isAdmin = false;
+
+    private String content;
 }

@@ -36,6 +36,16 @@ public class EmployeesService {
         return repository.findAll();
     }
 
+    public List<Employee> searchByPost(String post) {
+        if (post != null) return repository.findAllByPost(post);
+        return List.of();
+    }
+
+    public List<Employee> searchByProject(String project) {
+        if (project != null) return repository.findAllByProject(project);
+        return List.of();
+    }
+
     public void setFirstName(long chatId, String firstName) {
         var employee = getLastEmployee(chatId);
         employee.setFirstName(firstName);

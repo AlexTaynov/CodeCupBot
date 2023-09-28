@@ -1,0 +1,19 @@
+version: '3'
+services:
+  spring-app:
+    image: cccbot:latest
+    depends_on:
+      - mongo
+    links:
+      - mongo
+  mongo:
+    image: mongo:latest
+    command: mongod --setParameter textSearchEnabled=true
+    restart: always
+    ports:
+      - "62062:27017"
+    volumes:
+      - mongodb_data:/data/db
+volumes:
+  mongodb_data:
+

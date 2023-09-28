@@ -18,31 +18,43 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.taynov.cccbot.config.BotConfig;
+import ru.taynov.cccbot.constants.MessageConstants;
 import ru.taynov.cccbot.entity.Employee;
+import ru.taynov.cccbot.enums.EmployeeField;
 import ru.taynov.cccbot.enums.State;
+import ru.taynov.cccbot.repository.EmployeeDataRepository;
 import ru.taynov.cccbot.service.EmployeesService;
 import ru.taynov.cccbot.service.MessageConverter;
+import ru.taynov.cccbot.service.SearchService;
 import ru.taynov.cccbot.service.UserStateService;
 
 import java.time.LocalDate;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 import static java.util.Objects.isNull;
 import static ru.taynov.cccbot.constants.BotConstants.LIST_OF_COMMANDS;
 import static ru.taynov.cccbot.constants.CommandConstants.ADD;
+import static ru.taynov.cccbot.constants.CommandConstants.ADMIN;
 import static ru.taynov.cccbot.constants.CommandConstants.DELETE;
 import static ru.taynov.cccbot.constants.CommandConstants.EDIT;
 import static ru.taynov.cccbot.constants.CommandConstants.HELP;
 import static ru.taynov.cccbot.constants.CommandConstants.LIST;
+import static ru.taynov.cccbot.constants.CommandConstants.LIST_BY_POST;
+import static ru.taynov.cccbot.constants.CommandConstants.LIST_BY_PROJECT;
 import static ru.taynov.cccbot.constants.CommandConstants.SEARCH;
 import static ru.taynov.cccbot.constants.CommandConstants.START;
+import static ru.taynov.cccbot.constants.CommandConstants.USER;
+import static ru.taynov.cccbot.constants.MessageConstants.ADMIN_TEXT;
 import static ru.taynov.cccbot.constants.MessageConstants.CONTINUE_BUTTON;
 import static ru.taynov.cccbot.constants.MessageConstants.DELETE_BUTTON;
 import static ru.taynov.cccbot.constants.MessageConstants.EDIT_BUTTON;
 import static ru.taynov.cccbot.constants.MessageConstants.EMPTY;
 import static ru.taynov.cccbot.constants.MessageConstants.ERROR_TEXT;
 import static ru.taynov.cccbot.constants.MessageConstants.HELP_TEXT;
+import static ru.taynov.cccbot.constants.MessageConstants.NO_ACCESS_TEXT;
+import static ru.taynov.cccbot.constants.MessageConstants.SEARCH_BY_POST_TEXT;
+import static ru.taynov.cccbot.constants.MessageConstants.SEARCH_BY_PROJECT_TEXT;
 import static ru.taynov.cccbot.constants.MessageConstants.SEARCH_HINT;
 import static ru.taynov.cccbot.constants.MessageConstants.SET_FIRSTNAME;
 import static ru.taynov.cccbot.constants.MessageConstants.SET_HIRED_DATE;
@@ -57,8 +69,10 @@ import static ru.taynov.cccbot.constants.MessageConstants.SUCCESS;
 import static ru.taynov.cccbot.constants.MessageConstants.TRY_AGAIN;
 import static ru.taynov.cccbot.constants.MessageConstants.TRY_AGAIN_DATE;
 import static ru.taynov.cccbot.constants.MessageConstants.UNCOMPLETED_DELETED;
+import static ru.taynov.cccbot.constants.MessageConstants.USER_TEXT;
 import static ru.taynov.cccbot.enums.State.CHANGE_PROJECT;
 import static ru.taynov.cccbot.utils.ParametersExtractor.extractLongParameter;
+import static ru.taynov.cccbot.utils.ParametersExtractor.extractStringParameter;
 import static ru.taynov.cccbot.utils.ValidationUtils.validateDate;
 import static ru.taynov.cccbot.utils.ValidationUtils.validateLabel;
 import static ru.taynov.cccbot.utils.ValidationUtils.validateName;
@@ -69,13 +83,17 @@ public class TelegramBot extends TelegramLongPollingBot {
     private final UserStateService stateService;
     private final BotConfig config;
     private final EmployeesService employeesService;
+    private final SearchService searchService;
     private final MessageConverter messageConverter;
+    private final EmployeeDataRepository employeeDataRepository;
 
-    public TelegramBot(UserStateService stateService, BotConfig config, EmployeesService employeesService, MessageConverter messageConverter) {
+    public TelegramBot(UserStateService stateService, BotConfig config, EmployeesService employeesService, SearchService searchService, MessageConverter messageConverter, EmployeeDataRepository employeeDataRepository) {
         this.stateService = stateService;
         this.config = config;
         this.employeesService = employeesService;
+        this.searchService = searchService;
         this.messageConverter = messageConverter;
+        this.employeeDataRepository = employeeDataRepository;
         try {
             this.execute(new SetMyCommands(LIST_OF_COMMANDS, new BotCommandScopeDefault(), null));
         } catch (TelegramApiException e) {
@@ -110,8 +128,8 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             var messageText = update.getMessage().getText();
             if (messageText.startsWith("/")) {
+                stateService.setStatus(chatId, State.START);
                 if (!employeesService.uncompletedIsValid(chatId)) {
-                    stateService.setStatus(chatId, State.START);
                     prepareAndSendMessage(chatId, UNCOMPLETED_DELETED);
                     employeesService.deleteUncompleted(chatId);
                 } else {
@@ -119,12 +137,27 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
 
                 if (messageText.startsWith(START)) {
-                    prepareAndSendMessage(chatId, START_TEXT);
+                    prepareAndSendMessage(chatId,
+                            START_TEXT.formatted(stateService.userIsAdmin(chatId) ? MessageConstants.ADMIN : MessageConstants.USER));
                     return;
                 }
 
                 if (messageText.startsWith(HELP)) {
                     prepareAndSendMessage(chatId, HELP_TEXT);
+                    return;
+                }
+
+                if (messageText.startsWith(ADMIN)) {
+                    prepareAndSendMessage(chatId, ADMIN_TEXT);
+                    stateService.setIsAdmin(chatId, true);
+                    stateService.setStatus(chatId, State.START);
+                    return;
+                }
+
+                if (messageText.startsWith(USER)) {
+                    prepareAndSendMessage(chatId, USER_TEXT);
+                    stateService.setIsAdmin(chatId, false);
+                    stateService.setStatus(chatId, State.START);
                     return;
                 }
 
@@ -134,6 +167,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
 
                 if (messageText.startsWith(ADD)) {
+                    if (!stateService.userIsAdmin(chatId)) {
+                        prepareAndSendMessage(chatId, NO_ACCESS_TEXT);
+                        return;
+                    }
                     stateService.setStatus(chatId, State.CHANGE_FIRSTNAME);
                     prepareAndSendMessage(chatId, SET_FIRSTNAME);
                     return;
@@ -142,6 +179,23 @@ public class TelegramBot extends TelegramLongPollingBot {
                 if (messageText.startsWith(SEARCH)) {
                     stateService.setStatus(chatId, State.SEARCH);
                     prepareAndSendMessage(chatId, SEARCH_HINT);
+                    return;
+                }
+
+                if (messageText.startsWith(LIST_BY_POST)) {
+                    var values = employeeDataRepository.getAllPosts();
+                    prepareAndSendMessage(chatId, SEARCH_BY_POST_TEXT, buildKeyboardWithValues(values, EmployeeField.POST));
+                    return;
+                }
+
+                if (messageText.startsWith(LIST_BY_PROJECT)) {
+                    var values = employeeDataRepository.getAllProjects();
+                    prepareAndSendMessage(chatId, SEARCH_BY_PROJECT_TEXT, buildKeyboardWithValues(values, EmployeeField.PROJECT));
+                    return;
+                }
+
+                if (messageText.startsWith(DELETE)) {
+                    deleteCommand(chatId, messageText);
                     return;
                 }
 
@@ -175,11 +229,14 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
 
                 if (currentState.equals(State.CHANGE_MIDDLENAME)) {
-                    if (!validateLabel(messageText)) {
-                        prepareAndSendMessage(chatId, TRY_AGAIN);
-                        return;
+                    if (!messageText.equals(CONTINUE_BUTTON)) {
+                        if (!validateLabel(messageText)) {
+                            prepareAndSendMessage(chatId, TRY_AGAIN);
+                            return;
+                        }
+                        employeesService.setMiddleName(chatId, messageText);
                     }
-                    employeesService.setMiddleName(chatId, messageText);
+
                     prepareAndSendMessage(chatId, SET_POST);
                     stateService.setStatus(chatId, State.CHANGE_POST);
                     return;
@@ -197,7 +254,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
 
                 if (currentState.equals(State.CHANGE_PHOTO)) {
-                    if (messageText.equals(CONTINUE_BUTTON)) {
+                    if (messageText.contains(CONTINUE_BUTTON)) {
                         stateService.setStatus(chatId, State.CHANGE_PROJECT);
                         prepareAndSendMessage(chatId, SET_PROJECT);
                         return;
@@ -219,7 +276,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
                 if (currentState.equals(State.CHANGE_HIRING_DATE)) {
                     LocalDate date = null;
-                    if (!messageText.equals(CONTINUE_BUTTON)) {
+                    if (!messageText.contains(CONTINUE_BUTTON)) {
                         date = validateDate(messageText);
                         if (date == null) {
                             prepareAndSendMessage(chatId, TRY_AGAIN_DATE);
@@ -240,6 +297,10 @@ public class TelegramBot extends TelegramLongPollingBot {
             var chatId = update.getCallbackQuery().getMessage().getChatId();
 
             if (callbackData.startsWith(EDIT)) {
+                if (!stateService.userIsAdmin(chatId)) {
+                    prepareAndSendMessage(chatId, NO_ACCESS_TEXT);
+                    return;
+                }
                 var employeeId = extractLongParameter(callbackData);
                 if (employeeId == null) return;
 
@@ -250,15 +311,47 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
 
             if (callbackData.startsWith(DELETE)) {
-                var employeeId = extractLongParameter(callbackData);
-                if (employeeId == null) return;
+                deleteCommand(chatId, callbackData);
+                return;
+            }
 
-                var success = employeesService.delete(chatId, employeeId);
-                if (success) prepareAndSendMessage(chatId, SUCCESS);
-                else prepareAndSendMessage(chatId, EMPTY);
+            if (callbackData.startsWith(LIST_BY_POST)) {
+                var post = extractStringParameter(callbackData);
+                if (post == null) return;
+                sendEmployeeCards(chatId, employeesService.searchByPost(post));
+                return;
+            }
+
+            if (callbackData.startsWith(LIST_BY_PROJECT)) {
+                var employeeId = extractStringParameter(callbackData);
+                if (employeeId == null) return;
+                sendEmployeeCards(chatId, employeesService.searchByProject(employeeId));
                 return;
             }
         }
+
+    }
+
+    private void deleteCommand(Long chatId, String data) {
+        if (!stateService.userIsAdmin(chatId)) {
+            prepareAndSendMessage(chatId, NO_ACCESS_TEXT);
+            return;
+        }
+        var employeeId = extractLongParameter(data);
+        if (employeeId == null) return;
+
+        var success = employeesService.delete(chatId, employeeId);
+        if (success) prepareAndSendMessage(chatId, SUCCESS);
+        else prepareAndSendMessage(chatId, EMPTY);
+        return;
+    }
+
+    private void sendEmployeeCards(Long chatId, List<Employee> employees) {
+        if (employees.isEmpty()) {
+            prepareAndSendMessage(chatId, EMPTY);
+            return;
+        }
+        employees.forEach(it -> sendEmployeeCard(chatId, it));
     }
 
     private void handlePhoto(Long chatId, State currentState, PhotoSize photo) {
@@ -271,30 +364,13 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void search(long chatId, String messageText) {
-        var names = Arrays.stream(messageText.split(" ", 0)).limit(2).toList();
-        var firstName = names.get(0);
-        var lastName = (names.size() > 1) ? names.get(1) : null;
-
-        if (!validateName(firstName)) {
-            prepareAndSendMessage(chatId, TRY_AGAIN);
-            return;
-        }
-        if (lastName != null && !validateName(lastName)) {
-            prepareAndSendMessage(chatId, TRY_AGAIN);
-            return;
-        }
-
-        var employees = employeesService.search(firstName, lastName);
-        if (employees.isEmpty()) {
-            prepareAndSendMessage(chatId, EMPTY);
-            return;
-        }
-        employees.forEach(it -> sendEmployeeCard(chatId, it));
+        sendEmployeeCards(chatId, searchService.search(messageText));
     }
 
     private void sendEmployeeCard(long chatId, Employee employee) {
         var message = messageConverter.employeePage(employee);
-        var keyboard = buildEmployeePageKeyboard(employee.getId());
+
+        var keyboard = stateService.userIsAdmin(chatId) ? buildEmployeePageKeyboard(employee.getId()) : null;
         if (employee.getPhotoId() == null) {
             prepareAndSendMessage(chatId, message, keyboard);
         } else {
@@ -306,6 +382,25 @@ public class TelegramBot extends TelegramLongPollingBot {
         var row = new KeyboardRow();
         row.add(CONTINUE_BUTTON);
         return ReplyKeyboardMarkup.builder().keyboard(List.of(row)).oneTimeKeyboard(true).build();
+    }
+
+    private InlineKeyboardMarkup buildKeyboardWithValues(List<String> values, EmployeeField field) {
+        var rows = new ArrayList<List<InlineKeyboardButton>>();
+        values.forEach(
+                value -> {
+                    var data = buildCallbackData(field, value);
+                    var row = List.of(InlineKeyboardButton.builder().text(value).callbackData(data).build());
+                    rows.add(row);
+                }
+        );
+        return InlineKeyboardMarkup.builder().keyboard(rows).build();
+    }
+
+    private String buildCallbackData(EmployeeField field, String value) {
+        return switch (field) {
+            case PROJECT -> LIST_BY_PROJECT;
+            case POST -> LIST_BY_POST;
+        } + " " + value;
     }
 
     private InlineKeyboardMarkup buildEmployeePageKeyboard(long id) {

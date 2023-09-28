@@ -1,12 +1,11 @@
 bot:
-  name: ${BOT_NAME}
-  token: ${TOKEN}
+
 
 spring:
   data:
     mongodb:
       auto-index-creation: true
-      uri: mongodb://localhost:27017/ccc?authSource=admin
+      uri: mongodb://localhost:62062/ccc?authSource=admin
   jackson:
     mapper:
       accept-case-insensitive-enums: true
