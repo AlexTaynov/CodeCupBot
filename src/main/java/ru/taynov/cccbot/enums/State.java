@@ -15,6 +15,8 @@ public enum State {
     CHANGE_POST,
     CHANGE_PROJECT,
     CHANGE_HIRING_DATE,
-    CHANGE_PHOTO;
+    CHANGE_PHOTO,
+    SEARCH_BY_PROJECT,
+    SEARCH_BY_POST,
 }
 

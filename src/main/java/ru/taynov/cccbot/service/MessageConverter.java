@@ -18,7 +18,7 @@ public class MessageConverter {
         var result = new StringBuilder().append(EMPLOYEES_LIST);
         for (int i = 0; i < list.size(); i++) {
             var employee = list.get(i);
-            result.append(EMPLOYEE_ROW.formatted(i + 1,
+            result.append(EMPLOYEE_ROW.formatted(employee.getId(),
                     employee.getFirstName(),
                     employee.getLastName(),
                     employee.getPost(),
@@ -30,7 +30,7 @@ public class MessageConverter {
     }
 
     public String employeePage(Employee employee) {
-        return EMPLOYEE_CARD.formatted(buildName(employee), employee.getPost(), employee.getProjectName())
+        return EMPLOYEE_CARD.formatted(employee.getId(), buildName(employee), employee.getPost(), employee.getProjectName())
                 + buildHiredDate(employee);
     }
 
